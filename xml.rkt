@@ -79,7 +79,7 @@
      (string-append "<" (symbol->string sym) (translate-attributes head) " />")]
     [bd
      (string-append "<" (symbol->string sym) (translate-attributes head) ">"
-                   (parse* bd) "</" (symbol->string sym) ">")]))
+                    (parse* bd) "</" (symbol->string sym) ">")]))
 
 
 (define (translate-attributes head)
@@ -92,7 +92,37 @@
                     txt "\"" (translate-attributes rem))]))
 
 
+(define (xexpr-name xe)
+  ; X-expression -> String
+  ; retrieves the name of an X-expression
+  (first xe))
 
+
+(define (xexpr-attr xe)
+  ; X-expression -> Attribute
+  ; retrieves the attributes associated with an X-expression
+  (local (
+          (define olc (rest xe)))
+    (cond
+      [(empty? olc) '()]
+      [(head? (first olc)) (first olc)]
+      [else '()])))
+
+
+(define (xexpr-cont xe)
+  ; X-expression -> Body
+  ; retrieves the contents of an X-expression
+  (local (
+          (define olc (rest xe)))
+    (cond
+      [(empty? olc) '()]
+      [(head? (first olc)) (rest olc)]
+      [else olc])))
+
+
+(define (find-attr sym loa)
+  ; Symbol Head -> Attribute
+  (assq sym loa))
 
 ; ====================
 ; checks
@@ -108,14 +138,35 @@
 (check-expect (parse e1) "<machine initial=\"X\" />")
 (check-expect (parse e2) "<machine><action /></machine>")
 (check-expect (parse e3) "<machine><action /></machine>")
-(check-expect (parse e4) "<machine initial=\"X\"><action /><action /></machine>")
+(check-expect (parse e4)
+              "<machine initial=\"X\"><action /><action /></machine>")
 (check-expect (parse '(start)) "<start />")
 (check-expect (parse '(server ((name "example.org"))))
               "<server name=\"example.org\" />")
 (check-expect (parse '(carcas (board (grass)) (player ((name "sam")))))
-              "<carcas><board><grass /></board><player name=\"sam\" /></carcas>")
+              (string-append "<carcas><board><grass /></board>"
+                             "<player name=\"sam\" /></carcas>"))
 (check-expect (parse* '((transition ((from "seen-e") (to "seen-f")))
-                       (ul (li (word) (word)) (li (word)))))
+                        (ul (li (word) (word)) (li (word)))))
               (string-append 
                "<transition from=\"seen-e\" to=\"seen-f\" />"
                "<ul><li><word /><word /></li><li><word /></li></ul>"))
+(check-expect (xexpr-name '(machine ((initial "red"))
+                                    (action ((state "red") (next "green")))
+                                    (action ((state "green") (next "yellow")))
+                                    (action ((state "yellow") (next "red")))))
+              'machine)
+(check-expect (xexpr-attr '(machine ((initial "red"))
+                                    (action ((state "red") (next "green")))
+                                    (action ((state "green") (next "yellow")))
+                                    (action ((state "yellow") (next "red")))))
+              '((initial "red")))
+(check-expect (xexpr-cont '(machine ((initial "red"))
+                                    (action ((state "red") (next "green")))
+                                    (action ((state "green") (next "yellow")))
+                                    (action ((state "yellow") (next "red")))))
+              '((action ((state "red") (next "green")))
+                (action ((state "green") (next "yellow")))
+                (action ((state "yellow") (next "red")))))
+(check-expect (find-attr 'initial '((initial "red"))) '(initial "red"))
+(check-expect (find-attr 'action '((initial "red"))) #f)
