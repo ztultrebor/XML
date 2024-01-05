@@ -7,12 +7,28 @@
 ; An X-Expression is a list:
 ; - (cons Symbol Content)
 ; where Content is one of
-; – (cons Symbol Body)
-; – (cons Symbol (cons Head Body))
+; – Body
+; – (cons Head Body)
 ; where Body is short for [List-of X-Expression]
 ; where Head is short for [List-of Attribute]
 ; in which an Attribute is a list of two items:
 ;   (cons Symbol (cons String '()))
+#;
+(define (fn-on-xexpr xexpr)
+  (local (
+          (define sym (first xexpr))
+          (define (headbody (rest xexpr))))
+    ; - IN -
+    (cond
+      [(head? headbody)
+       ((fn-on-symbol sym)
+        ... (fn-on-head (first headbody)))]
+      [(head? (first headbody))
+       ((fn-on-symbol sym)
+        ... (fn-on-head (first headbody))
+        ... (fn-on-xexpr (rest headbody)))]
+      [else ((fn-on-symbol sym)
+             ... (fn-on-xexpr headbody))])))
 
 
 (define (attribute? xexpr)
@@ -38,25 +54,43 @@
 
 (define (parse xexpr)
   ; X-Expression -> String
-  ; takes an X-Expression and converts it into XML
-  (match xexpr
+  ; takes an X-Expression and converts it into XML-style text
+  (local (
+          (define sym (first xexpr))
+          (define headbody (rest xexpr)))
+    ; - IN -
+    (match headbody
+      [(cons (? head?) body) (translate sym (first headbody) body)]
+      [body (translate sym '() body)])))
+
+
+(define (parse* xexpr)
+  ; Body -> String
+  ; takes an [ListOf X-Expression], maps it into XML-style text,
+  ; and reduces it into a XML test string
+  (foldr string-append "" (map parse xexpr)))
+
+
+(define (translate sym head body)
+  ; Symbol Head Body -> String
+  ; translates aspects of an X-expression into XML-style text
+  (match body
+    [(? empty?)
+     (string-append "<" (symbol->string sym) (translate-attributes head) " />")]
+    [bd
+     (string-append "<" (symbol->string sym) (translate-attributes head) ">"
+                   (parse* bd) "</" (symbol->string sym) ">")]))
+
+
+(define (translate-attributes head)
+  ; Head -> String
+  ; translates head attributes into XML-style text
+  (match head
     [(? empty?) ""]
-    [(? attribute?) (string-append " " (symbol->string (first xexpr)) "=\""
-                                   (second xexpr) "\"")]
-    [(? head?) (string-append (parse (first xexpr)) (parse (rest xexpr)))]
-    [(list (? symbol?))
-     (string-append "<" (symbol->string (first xexpr)) " />")]
-    [(list (? symbol?) (? head?))
-     (string-append "<" (symbol->string (first xexpr))
-                    (parse (second xexpr)) " />")]
-    [(cons (? symbol?) (cons (? head?) rem))
-     (string-append "<" (symbol->string (first xexpr)) (parse (second xexpr))
-                    ">" (parse rem)
-                    "</" (symbol->string (first xexpr)) ">")]
-    [(cons (? symbol?) rem)
-     (string-append "<" (symbol->string (first xexpr)) ">" (parse rem)
-                    "</" (symbol->string (first xexpr)) ">")]
-    [(? list?) (string-append (parse (first xexpr)) (parse (rest xexpr)))]))
+    [(cons (list sym txt) rem)
+     (string-append " " (symbol->string sym) "=\""
+                    txt "\"" (translate-attributes rem))]))
+
 
 
 
@@ -80,7 +114,7 @@
               "<server name=\"example.org\" />")
 (check-expect (parse '(carcas (board (grass)) (player ((name "sam")))))
               "<carcas><board><grass /></board><player name=\"sam\" /></carcas>")
-(check-expect (parse '((transition ((from "seen-e") (to "seen-f")))
+(check-expect (parse* '((transition ((from "seen-e") (to "seen-f")))
                        (ul (li (word) (word)) (li (word)))))
               (string-append 
                "<transition from=\"seen-e\" to=\"seen-f\" />"
